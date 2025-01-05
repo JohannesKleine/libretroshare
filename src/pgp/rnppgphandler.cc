@@ -169,19 +169,21 @@ RNPPGPHandler::RNPPGPHandler(const std::string& pubring, const std::string& secr
 
     RsInfo() << "Loaded " << pub_count << " public keys, and " << sec_count << " secret keys." ;
 
-    rnp_identifier_iterator_t it;
-    rnp_identifier_iterator_create(mRnpFfi,&it,RNP_IDENTIFIER_KEYID);
-    const char *key_identifier = nullptr;
-
-    while(RNP_SUCCESS == rnp_identifier_iterator_next(it,&key_identifier) && key_identifier!=nullptr)
     {
-        RNP_KEY_HANDLE_STRUCT(key_handle);
-        rnp_locate_key(mRnpFfi,RNP_IDENTIFIER_KEYID,key_identifier,&key_handle);
+        rnp_identifier_iterator_t it;
+        rnp_identifier_iterator_create(mRnpFfi,&it,RNP_IDENTIFIER_KEYID);
+        const char *key_identifier = nullptr;
 
-        initCertificateInfo(key_handle) ;
+        while(RNP_SUCCESS == rnp_identifier_iterator_next(it,&key_identifier) && key_identifier!=nullptr)
+        {
+            RNP_KEY_HANDLE_STRUCT(key_handle);
+            rnp_locate_key(mRnpFfi,RNP_IDENTIFIER_KEYID,key_identifier,&key_handle);
+
+            initCertificateInfo(key_handle) ;
+        }
+
+        rnp_identifier_iterator_destroy(it);
     }
-
-    rnp_identifier_iterator_destroy(it);
 
 #ifdef TODO
         const ops_keydata_t *keydata ;
@@ -869,21 +871,22 @@ bool RNPPGPHandler::getGPGDetailsFromBinaryBlock(const unsigned char *mem_block,
         else if(pub_count > 1)
             throw std::runtime_error("Supplied memory block contain more than one key (" + RsUtil::NumberToString(pub_count) + " found)");
 
-        rnp_identifier_iterator_t it;
-        rnp_identifier_iterator_create(tmp_ffi,&it,RNP_IDENTIFIER_KEYID);
+        {
+            rnp_identifier_iterator_t it;
+            rnp_identifier_iterator_create(tmp_ffi,&it,RNP_IDENTIFIER_KEYID);
 
-        const char *key_identifier = nullptr;
-        if(rnp_identifier_iterator_next(it,&key_identifier) != RNP_SUCCESS)
-            throw std::runtime_error("Error while reaching first key");
+            const char *key_identifier = nullptr;
+            if(rnp_identifier_iterator_next(it,&key_identifier) != RNP_SUCCESS)
+                throw std::runtime_error("Error while reaching first key");
 
-        rnp_identifier_iterator_destroy(it);
-
-        key_id = RsPgpId(key_identifier);
+            key_id = RsPgpId(key_identifier);
+            rnp_identifier_iterator_destroy(it);
+        }
 
         RsDbg() << "Binary block contains key ID " << key_id.toStdString() ;
 
         RNP_KEY_HANDLE_STRUCT(key_handle);
-        if(rnp_locate_key(tmp_ffi,RNP_IDENTIFIER_KEYID,key_identifier,&key_handle) != RNP_SUCCESS)
+        if(rnp_locate_key(tmp_ffi,RNP_IDENTIFIER_KEYID,key_id.toStdString().c_str(),&key_handle) != RNP_SUCCESS)
             throw std::runtime_error("Error while reaching first key data");
 
         RNP_BUFFER_STRUCT(uid);
@@ -937,14 +940,19 @@ static bool checkGPGKeyPair(rnp_ffi_t tmp_ffi,
     if(pub_count != 1) throw std::runtime_error("Expected 1 public key: found "+RsUtil::NumberToString(pub_count));
     if(sec_count != 1) throw std::runtime_error("Expected 1 secret key: found "+RsUtil::NumberToString(sec_count));
 
-    rnp_identifier_iterator_t it;
-    rnp_identifier_iterator_create(tmp_ffi,&it,RNP_IDENTIFIER_KEYID);
-    const char *key_identifier = nullptr;
+    {
+        rnp_identifier_iterator_t it;
+        rnp_identifier_iterator_create(tmp_ffi,&it,RNP_IDENTIFIER_KEYID);
+        const char *key_identifier = nullptr;
 
-    rnp_identifier_iterator_next(it,&key_identifier);
-    rnp_identifier_iterator_destroy(it);
+        rnp_identifier_iterator_next(it,&key_identifier);
 
-    imported_key_id = RsPgpId(key_identifier);
+        if(key_identifier == nullptr)
+            throw std::runtime_error("no key identifier found in this keypair");
+
+        imported_key_id = RsPgpId(key_identifier);
+        rnp_identifier_iterator_destroy(it);
+    }
 
     // check that the key has public and secret key for the same key
 
@@ -954,10 +962,7 @@ static bool checkGPGKeyPair(rnp_ffi_t tmp_ffi,
     RNP_BUFFER_STRUCT(key_alg);
     uint32_t key_bits;
 
-    rnp_locate_key(tmp_ffi,RNP_IDENTIFIER_KEYID,key_identifier,&key_handle);
-
-    if(key_identifier == nullptr)
-        throw std::runtime_error("no key identifier found in this keypair");
+    rnp_locate_key(tmp_ffi,RNP_IDENTIFIER_KEYID,imported_key_id.toStdString().c_str(),&key_handle);
 
     rnp_key_get_fprint(key_handle, &key_fprint);
     rnp_key_get_primary_uid(key_handle, &key_uid);
