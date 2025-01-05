@@ -108,7 +108,7 @@ typedef t_ScopeGuard<rnp_ffi_st             ,&rnp_ffi_destroy>              rnp_
 #define RNP_FFI_STRUCT(name)                 rnp_ffi_t               name=nullptr; rnp_ffi_autodelete               name ## tmp_destructor(name);
 #define RNP_BUFFER_STRUCT(name)              char            *       name=nullptr; rnp_buffer_autodelete            name ## tmp_destructor(name);
 
-// The following one misses a fnction to delete the pointer (problem in RNP lib???)
+// The following one misses a function to delete the pointer (problem in RNP lib???)
 
 #define RNP_OP_VERIFY_SIGNATURE_STRUCT(name) rnp_op_verify_signature_t name=nullptr;
 
